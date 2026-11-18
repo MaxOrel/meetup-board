@@ -19,7 +19,9 @@ services:
     environment:
       DATABASE_URL: postgres://meetup:meetup@db:5432/meetup
       # Секрет подписи токенов — только из окружения. В проде задаётся на сервере, не в репозитории.
-      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_SECRET: ${JWT_SECRET:-local-compose-secret-not-for-production-0000}
+      # Учебные аккаунты user@meetup.local и admin@meetup.local — только для локального запуска
+      SEED_DEMO_USERS: "true"
     depends_on:
       db:
         condition: service_healthy

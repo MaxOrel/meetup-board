@@ -5,13 +5,14 @@ import { AuthController } from './auth.controller.js';
 import { AuthGuard } from './auth.guard.js';
 import { AuthService } from './auth.service.js';
 import { DemoUserSeed } from './demo-user.seed.js';
+import { jwtSecret } from './jwt-secret.js';
 
 @Module({
   imports: [
     UsersModule,
     JwtModule.register({
       // Секрет подписи. В учебном режиме есть значение по умолчанию, в проде — только из окружения.
-      secret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
+      secret: jwtSecret(),
       signOptions: { expiresIn: '1h' },
     }),
   ],

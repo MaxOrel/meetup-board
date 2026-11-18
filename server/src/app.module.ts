@@ -10,7 +10,8 @@ import { UserEntity } from './users/user.entity.js';
 class HealthController {
   @Get()
   health() {
-    return { status: 'ok' };
+    // version — какой образ сейчас работает: на боевом сервере туда попадает хеш коммита из CI
+    return { status: 'ok', version: process.env.APP_VERSION ?? 'dev' };
   }
 }
 

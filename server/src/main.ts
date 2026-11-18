@@ -12,6 +12,9 @@ import { validationPipe } from './common/validation.js';
 export async function createApp() {
   const app = await NestFactory.create(AppModule, { logger: process.env.NODE_ENV === 'test' ? false : undefined });
   app.setGlobalPrefix('api/v1');
+  // За прокси (Caddy → nginx → API) без этого у всех посетителей один «адрес» — адрес соседнего контейнера.
+  // TRUST_PROXY=2 — сколько прокси стоит перед API; от этого зависят лимиты по IP и журналы.
+  if (process.env.TRUST_PROXY) app.getHttpAdapter().getInstance().set('trust proxy', Number(process.env.TRUST_PROXY));
   // Helmet — набор заголовков безопасности: запрет встраивать ответы во фреймы, nosniff и другие
   app.use(helmet());
   app.use(cookieParser()); // request.cookies — из заголовка Cookie
