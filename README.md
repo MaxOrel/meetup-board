@@ -4,3 +4,4 @@
 
 ## Запуск
 - Разработка: `server/` — `npm run db:up && npm run start:dev` (API на :3000), `web/` — `npm run dev` (сайт на :5173)
+- Всё приложение в контейнерах: `docker compose up --build` → http://localhost:8080
