@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import type { Role } from '../users/user.entity.js';
+import { SESSION_COOKIE } from './session-cookie.js';
 
 // Что лежит внутри токена. sub — стандартное поле JWT «кому выдан».
 export interface TokenPayload {
@@ -14,7 +15,7 @@ export interface TokenPayload {
 export type AuthRequest = Request & { user: TokenPayload };
 
 // Guard решает, пускать ли запрос в обработчик.
-// Ждём заголовок Authorization: Bearer <токен> с верной подписью и неистёкшим сроком.
+// Токен берём из httpOnly-cookie (её ставит вход): подпись верная и срок не истёк — пускаем.
 // Passport с JwtStrategy делает то же самое — здесь без магии, чтобы были видны шаги.
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -22,8 +23,8 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthRequest>();
-    const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    if (type !== 'Bearer' || !token) throw new UnauthorizedException('Нужно войти');
+    const token: unknown = request.cookies?.[SESSION_COOKIE];
+    if (typeof token !== 'string' || !token) throw new UnauthorizedException('Нужно войти');
     try {
       request.user = await this.jwt.verifyAsync<TokenPayload>(token);
       return true;

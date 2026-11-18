@@ -39,9 +39,8 @@ export const userSchema = z.object({
   role: z.enum(['user', 'admin']),
 })
 
-// Ответ на вход и регистрацию: токен доступа и сам пользователь
+// Ответ на вход и регистрацию: только пользователь. Токен сервер кладёт в httpOnly-cookie.
 export const authResponseSchema = z.object({
-  accessToken: z.string().min(1),
   user: userSchema,
 })
 

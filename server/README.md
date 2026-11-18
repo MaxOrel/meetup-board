@@ -15,12 +15,18 @@ npm run start:dev    # http://localhost:3000/api/v1/events
 - Заново засеять базу: `docker compose down -v`, `npm run db:up`, перезапустить сервер.
 
 ## Вход
-- `POST /auth/register` `{ name, email, password }` → 201 `{ accessToken, user }`; почта занята → 409 с ошибкой у поля `email`.
-- `POST /auth/login` `{ email, password }` → 200 `{ accessToken, user }`; неверные данные → 401.
-- `GET /me` с заголовком `Authorization: Bearer <accessToken>` → пользователь; без токена → 401.
+- `POST /auth/register` `{ name, email, password }` → 201 `{ user }` и cookie `meetup_session`; почта занята → 409 с ошибкой у поля `email`.
+- `POST /auth/login` `{ email, password }` → 200 `{ user }` и cookie; неверные данные → 401.
+- `POST /auth/logout` → 204, cookie стёрта.
+- `GET /me` → пользователь, если браузер прислал cookie сессии; иначе 401.
+- Cookie: `HttpOnly` (JavaScript её не видит), `SameSite=Lax`, `Path=/api`; `COOKIE_SECURE=true` — только по HTTPS, для прода.
+- `POST`, `PATCH`, `DELETE` с чужим заголовком `Origin` → 403. Свои сайты — `ALLOWED_ORIGINS` (по умолчанию `http://localhost:5173,http://localhost:8080`).
 - Учебные аккаунты создаются при старте: **user@meetup.local / meetup-demo** и администратор **admin@meetup.local / meetup-admin**.
-- Создавать, менять и удалять события может только администратор: без токена — 401, с токеном обычного пользователя — 403.
+- Создавать, менять и удалять события может только администратор: без входа — 401, обычный пользователь — 403.
 - Пароли хранятся хешем `scrypt` с солью (`auth/password.ts`), токен — JWT на час, секрет — `JWT_SECRET`.
+
+## Docker
+`docker compose up --build` в корне репозитория — фронт, API и база, сайт на http://localhost:8080. Наружу открыт только nginx.
 
 ## Тесты
 ```bash

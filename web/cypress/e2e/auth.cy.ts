@@ -11,8 +11,8 @@ describe('Вход и профиль', () => {
   })
 
   it('гость → регистрация → профиль → перезагрузка → выход → вход', () => {
-    cy.intercept('POST', '**/api/v1/auth/*').as('auth')
-    cy.intercept('GET', '**/api/v1/me').as('me')
+    cy.intercept('POST', '**/api/v1/auth/register').as('register')
+    cy.intercept('POST', '**/api/v1/auth/login').as('login')
 
     // Профиль закрыт: гостя отправляют на вход
     cy.visit('/profile')
@@ -24,29 +24,34 @@ describe('Вход и профиль', () => {
     cy.get('#email').type(email)
     cy.get('#password').type(password)
     cy.contains('button', 'Создать аккаунт').click()
-    cy.wait('@auth').its('response.statusCode').should('eq', 201)
+    cy.wait('@register').its('response.statusCode').should('eq', 201)
+    // Сессия — в httpOnly-cookie: JavaScript страницы её не видит, в localStorage токена нет
+    cy.getCookie('meetup_session').should('have.property', 'httpOnly', true)
+    cy.window().its('localStorage').invoke('getItem', 'meetup-token').should('be.null')
 
     // После регистрации — обратно туда, куда шли
     cy.location('pathname').should('eq', '/profile')
     cy.contains('h1', name)
     cy.contains('header a', 'Ира')
 
-    // Перезагрузка: токен сохранён, сервер по /me подтверждает, кто это
+    // Перезагрузка: cookie на месте, сервер по /me подтверждает, кто это
+    // Перехват ставим здесь: первый /me был ещё гостевым (401), его ждать не нужно
+    cy.intercept('GET', '**/api/v1/me').as('me')
     cy.reload()
     cy.wait('@me').its('response.statusCode').should('eq', 200)
     cy.contains('h1', name)
 
-    // Выход: токен забыт, профиль снова закрыт
+    // Выход: сервер стёр cookie, профиль снова закрыт
     cy.contains('button', 'Выйти').click()
     cy.location('pathname').should('eq', '/login')
     cy.contains('header a', 'Войти')
-    cy.window().its('localStorage').invoke('getItem', 'meetup-token').should('be.null')
+    cy.getCookie('meetup_session').should('be.null')
 
     // Вход тем же аккаунтом
     cy.get('#email').type(email)
     cy.get('#password').type(password)
     cy.contains('button', /^Войти$/).click()
-    cy.wait('@auth').its('response.statusCode').should('eq', 200)
+    cy.wait('@login').its('response.statusCode').should('eq', 200)
     cy.contains('h1', name)
   })
 

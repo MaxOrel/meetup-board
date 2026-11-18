@@ -5,7 +5,8 @@ import type { Repository } from 'typeorm';
 import { createApp } from '../src/main.js';
 import { UserEntity } from '../src/users/user.entity.js';
 
-// Вход со стороны API — тот же сценарий, что Cypress проходит в браузере
+// Вход со стороны API — тот же сценарий, что Cypress проходит в браузере.
+// request.agent хранит cookie между запросами, как браузер.
 describe('/api/v1/auth и /me (e2e)', () => {
   let app: INestApplication;
   let api: ReturnType<typeof request>;
@@ -23,12 +24,13 @@ describe('/api/v1/auth и /me (e2e)', () => {
     await app.close();
   });
 
-  it('регистрация → 201, токен и пользователь без хеша пароля', async () => {
+  it('регистрация → 201, httpOnly-cookie и пользователь; токена в теле нет', async () => {
     const res = await api.post('/api/v1/auth/register').send(maria).expect(201);
-    expect(res.body.accessToken).toEqual(expect.any(String));
-    // Почту приводим к нижнему регистру: Maria@ и maria@ — один аккаунт
-    expect(res.body.user).toEqual({ id: expect.any(String), name: maria.name, email: 'maria@example.com', role: 'user' });
-    expect(res.body.user).not.toHaveProperty('passwordHash');
+    expect(res.body).toEqual({ user: { id: expect.any(String), name: maria.name, email: 'maria@example.com', role: 'user' } });
+    const cookie = res.headers['set-cookie']?.[0] ?? '';
+    expect(cookie).toMatch(/^meetup_session=/);
+    expect(cookie).toMatch(/HttpOnly/);
+    expect(cookie).toMatch(/SameSite=Lax/);
   });
 
   it('та же почта ещё раз → 409 с ошибкой у поля email', async () => {
@@ -41,10 +43,14 @@ describe('/api/v1/auth и /me (e2e)', () => {
     expect(res.body.errors.map((e: { field: string }) => e.field)).toEqual(['email', 'password']);
   });
 
-  it('вход и /me с токеном', async () => {
-    const login = await api.post('/api/v1/auth/login').send({ email: maria.email, password: maria.password }).expect(200);
-    const me = await api.get('/api/v1/me').set('Authorization', `Bearer ${login.body.accessToken}`).expect(200);
+  it('вход → cookie → /me; выход → cookie стёрта → /me 401', async () => {
+    const browser = request.agent(app.getHttpServer());
+    await browser.post('/api/v1/auth/login').send({ email: maria.email, password: maria.password }).expect(200);
+    const me = await browser.get('/api/v1/me').expect(200);
     expect(me.body.email).toBe('maria@example.com');
+
+    await browser.post('/api/v1/auth/logout').expect(204);
+    await browser.get('/api/v1/me').expect(401);
   });
 
   it('неверный пароль и чужая почта — одинаковый ответ 401', async () => {
@@ -53,8 +59,16 @@ describe('/api/v1/auth и /me (e2e)', () => {
     expect(wrongPassword.body).toEqual(unknownEmail.body);
   });
 
-  it('/me без токена и с поддельным токеном → 401', async () => {
+  it('/me без cookie и с поддельной cookie → 401', async () => {
     await api.get('/api/v1/me').expect(401);
-    await api.get('/api/v1/me').set('Authorization', 'Bearer not.a.token').expect(401);
+    await api.get('/api/v1/me').set('Cookie', 'meetup_session=not.a.token').expect(401);
+  });
+
+  it('POST с чужого сайта (заголовок Origin) → 403', async () => {
+    await api
+      .post('/api/v1/auth/login')
+      .set('Origin', 'https://other-site.example')
+      .send({ email: maria.email, password: maria.password })
+      .expect(403);
   });
 });

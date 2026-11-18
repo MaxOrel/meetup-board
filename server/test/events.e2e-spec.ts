@@ -16,7 +16,8 @@ describe('/api/v1/events (e2e)', () => {
   let user: string;
 
   const tokenFor = async ({ email, password }: { email: string; password: string }) =>
-    (await api.post('/api/v1/auth/login').send({ email, password }).expect(200)).body.accessToken as string;
+    // cookie сессии из ответа на вход — дальше отправляем её в заголовке Cookie
+    ((await api.post('/api/v1/auth/login').send({ email, password }).expect(200)).headers['set-cookie']?.[0] ?? '').split(';')[0];
 
   const validEvent = {
     title: 'Тесты как страховка рефакторинга',
@@ -78,13 +79,13 @@ describe('/api/v1/events (e2e)', () => {
   });
 
   describe('изменение', () => {
-    it('без токена → 401, обычный пользователь → 403', async () => {
+    it('без входа → 401, обычный пользователь → 403', async () => {
       await api.post('/api/v1/events').send(validEvent).expect(401);
-      await api.post('/api/v1/events').set('Authorization', `Bearer ${user}`).send(validEvent).expect(403);
+      await api.post('/api/v1/events').set('Cookie', user).send(validEvent).expect(403);
     });
 
     it('POST с ошибками → 400, сообщения по-русски по каждому полю', async () => {
-      const res = await api.post('/api/v1/events').set('Authorization', `Bearer ${admin}`).send({ ...validEvent, category: 'x', seatsTotal: 0 }).expect(400);
+      const res = await api.post('/api/v1/events').set('Cookie', admin).send({ ...validEvent, category: 'x', seatsTotal: 0 }).expect(400);
       expect(res.body.errors).toEqual(
         expect.arrayContaining([
           { field: 'category', message: 'Неизвестная категория' },
@@ -94,18 +95,18 @@ describe('/api/v1/events (e2e)', () => {
     });
 
     it('полный цикл: создать → прочитать → изменить → удалить', async () => {
-      const created = await api.post('/api/v1/events').set('Authorization', `Bearer ${admin}`).send(validEvent).expect(201);
+      const created = await api.post('/api/v1/events').set('Cookie', admin).send(validEvent).expect(201);
       const id: string = created.body.id;
       expect(created.body).toMatchObject({ ...validEvent, date: '2026-12-01T16:00:00.000Z', seatsTaken: 0 });
 
       await api.get(`/api/v1/events/${id}`).expect(200);
 
-      const patched = await api.patch(`/api/v1/events/${id}`).set('Authorization', `Bearer ${admin}`).send({ seatsTaken: 29 }).expect(200);
+      const patched = await api.patch(`/api/v1/events/${id}`).set('Cookie', admin).send({ seatsTaken: 29 }).expect(200);
       expect(patched.body.seatsTaken).toBe(29);
 
-      await api.patch(`/api/v1/events/${id}`).set('Authorization', `Bearer ${admin}`).send({ seatsTaken: 31 }).expect(400);
+      await api.patch(`/api/v1/events/${id}`).set('Cookie', admin).send({ seatsTaken: 31 }).expect(400);
 
-      await api.delete(`/api/v1/events/${id}`).set('Authorization', `Bearer ${admin}`).expect(204);
+      await api.delete(`/api/v1/events/${id}`).set('Cookie', admin).expect(204);
       await api.get(`/api/v1/events/${id}`).expect(404);
     });
   });

@@ -1,28 +1,10 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
-import { AuthError, fetchMe, login, register, type AuthField, type Credentials, type Registration } from '../api/auth.ts'
+import { AuthError, fetchMe, login, logout, register, type AuthField, type Credentials, type Registration } from '../api/auth.ts'
 import type { User } from '../types.ts'
 import type { AppDispatch, RootState } from './index.ts'
 
-// Токен живёт в localStorage, чтобы вход переживал перезагрузку страницы.
-// Так делают во многих проектах. Чем это опасно и как хранить надёжнее — тема вебинара 7.
-const TOKEN_KEY = 'meetup-token'
-
-function readToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY)
-  } catch {
-    return null
-  }
-}
-
-function writeToken(token: string | null) {
-  try {
-    if (token) localStorage.setItem(TOKEN_KEY, token)
-    else localStorage.removeItem(TOKEN_KEY)
-  } catch {
-    // приватный режим или запрет хранилища — просто не запоминаем вход
-  }
-}
+// Токена на фронте больше нет: он в httpOnly-cookie, JavaScript её не видит.
+// Поэтому «вошли ли мы» знает только сервер — спрашиваем его через /me при старте.
 
 export interface AuthFailure {
   status: number
@@ -31,13 +13,14 @@ export interface AuthFailure {
 }
 
 export interface AuthState {
-  token: string | null
+  // checking — ждём ответа /me; guest — не вошли; user — вошли
+  session: 'checking' | 'guest' | 'user'
   user: User | null
   status: 'idle' | 'pending' | 'failed'
   error: AuthFailure | null
 }
 
-const initialState: AuthState = { token: readToken(), user: null, status: 'idle', error: null }
+const initialState: AuthState = { session: 'checking', user: null, status: 'idle', error: null }
 
 // Ошибку превращаем в сериализуемый объект: класс AuthError в store класть нельзя
 function toFailure(error: unknown): AuthFailure {
@@ -49,9 +32,7 @@ const thunk = createAsyncThunk.withTypes<{ state: RootState; dispatch: AppDispat
 
 export const signIn = thunk('auth/signIn', async (credentials: Credentials, { rejectWithValue }) => {
   try {
-    const result = await login(credentials)
-    writeToken(result.accessToken)
-    return result
+    return (await login(credentials)).user
   } catch (error) {
     return rejectWithValue(toFailure(error))
   }
@@ -59,35 +40,30 @@ export const signIn = thunk('auth/signIn', async (credentials: Credentials, { re
 
 export const signUp = thunk('auth/signUp', async (registration: Registration, { rejectWithValue }) => {
   try {
-    const result = await register(registration)
-    writeToken(result.accessToken)
-    return result
+    return (await register(registration)).user
   } catch (error) {
     return rejectWithValue(toFailure(error))
   }
 })
 
-// После перезагрузки токен есть, а пользователя нет — спрашиваем сервер, кто это
-export const restoreSession = thunk(
-  'auth/restoreSession',
-  async (_: void, { getState, rejectWithValue }) => {
-    const token = getState().auth.token
-    try {
-      return await fetchMe(token ?? '')
-    } catch (error) {
-      // 401 — токен истёк или подделан: забываем его
-      if (error instanceof AuthError && error.status === 401) writeToken(null)
-      return rejectWithValue(toFailure(error))
-    }
-  },
-  { condition: (_, { getState }) => Boolean(getState().auth.token) && !getState().auth.user },
-)
+// При старте: браузер сам отправит cookie, сервер ответит, чья она
+export const restoreSession = thunk('auth/restoreSession', async (_: void, { rejectWithValue }) => {
+  try {
+    return await fetchMe()
+  } catch (error) {
+    return rejectWithValue(toFailure(error))
+  }
+})
+
+// Выход: стереть httpOnly-cookie может только сервер
+export const signOut = thunk('auth/signOut', async () => {
+  await logout().catch(() => undefined) // сервер недоступен — на фронте всё равно выходим
+})
 
 const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    loggedOut: () => ({ ...initialState, token: null }),
     clearAuthError(state) {
       state.error = null
       if (state.status === 'failed') state.status = 'idle'
@@ -102,8 +78,8 @@ const authSlice = createSlice({
         })
         .addCase(action.fulfilled, (state, { payload }) => {
           state.status = 'idle'
-          state.token = payload.accessToken
-          state.user = payload.user
+          state.session = 'user'
+          state.user = payload
         })
         .addCase(action.rejected, (state, { payload }) => {
           state.status = 'failed'
@@ -112,23 +88,19 @@ const authSlice = createSlice({
     }
     builder
       .addCase(restoreSession.fulfilled, (state, { payload }) => {
+        state.session = 'user'
         state.user = payload
       })
-      .addCase(restoreSession.rejected, (state, { payload }) => {
-        // 401 — токен недействителен, выходим. Сервер недоступен — токен оставляем: он ещё может быть рабочим.
-        if (payload?.status === 401) state.token = null
+      .addCase(restoreSession.rejected, (state) => {
+        // 401 — не вошли. Сервер недоступен — тоже считаем гостем: профиль всё равно не загрузится.
+        if (state.session === 'checking') state.session = 'guest'
       })
+      .addCase(signOut.fulfilled, () => ({ ...initialState, session: 'guest' as const }))
   },
 })
 
 export const { clearAuthError } = authSlice.actions
 export const authReducer = authSlice.reducer
 
-// Выход: забыть токен и очистить состояние. Побочный эффект — в thunk, редьюсер остаётся чистым.
-export const signOut = () => (dispatch: AppDispatch) => {
-  writeToken(null)
-  dispatch(authSlice.actions.loggedOut())
-}
-
 export const selectUser = (state: RootState) => state.auth.user
-export const selectIsSignedIn = (state: RootState) => state.auth.token !== null
+export const selectSession = (state: RootState) => state.auth.session

@@ -1,8 +1,10 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
+import { originCheck } from './common/origin-check.middleware.js';
 import { validationPipe } from './common/validation.js';
 
 // Приложение со всеми настройками — одна функция и для запуска, и для e2e-тестов.
@@ -12,7 +14,11 @@ export async function createApp() {
   app.setGlobalPrefix('api/v1');
   // Helmet — набор заголовков безопасности: запрет встраивать ответы во фреймы, nosniff и другие
   app.use(helmet());
-  app.enableCors({ origin: [/^http:\/\/localhost:\d+$/] });
+  app.use(cookieParser()); // request.cookies — из заголовка Cookie
+  app.use(originCheck); // POST/PATCH/DELETE — только со своих сайтов
+  // В разработке фронт на :5173, API на :3000 — разные origin. credentials: браузер отправит cookie.
+  // В Docker фронт и API за одним nginx, CORS там не нужен.
+  app.enableCors({ origin: [/^http:\/\/localhost:\d+$/], credentials: true });
   // Глобальный ValidationPipe: каждый @Body и @Query проверяется по своему DTO
   app.useGlobalPipes(validationPipe);
   app.useGlobalFilters(new HttpExceptionFilter());
