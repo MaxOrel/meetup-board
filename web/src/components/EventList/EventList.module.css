@@ -1,0 +1,5 @@
+.catalog {
+  display: grid; gap: var(--space-6);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  padding-bottom: var(--space-12);
+}

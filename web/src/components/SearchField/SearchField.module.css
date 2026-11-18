@@ -1,0 +1,9 @@
+.search {
+  display: flex; align-items: center; gap: var(--space-2); max-width: 520px; margin-top: var(--space-6);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+  border: 1.5px solid var(--color-line); border-radius: var(--radius-pill); background: var(--color-surface);
+}
+.search:focus-within { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+.input { flex: 1; min-width: 0; border: 0; background: transparent; padding-block: var(--space-2); outline: none; }
+.input:focus-visible { box-shadow: none; }
+.icon { color: var(--color-muted); }

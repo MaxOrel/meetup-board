@@ -1,0 +1,7 @@
+.avatar {
+  display: inline-grid; place-items: center; flex: none; border-radius: 50%;
+  background: var(--color-primary); color: var(--color-primary-ink);
+  font: 700 var(--text-xs) / 1 var(--font-display); letter-spacing: -0.02em;
+}
+.s { width: 32px; height: 32px; }
+.l { width: 72px; height: 72px; font-size: var(--text-l); }

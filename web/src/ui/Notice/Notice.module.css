@@ -1,0 +1,10 @@
+.notice {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-4) var(--space-6); border-radius: var(--radius-ticket); background: var(--color-surface);
+}
+.error { box-shadow: inset 4px 0 0 var(--color-alarm); }
+.success { box-shadow: inset 4px 0 0 var(--color-ok); }
+.empty { flex-direction: column; align-items: start; padding-block: var(--space-8); }
+
+.title { font: 700 var(--text-l) / 1.3 var(--font-display); letter-spacing: -0.02em; }
+.body { display: grid; gap: var(--space-1); }

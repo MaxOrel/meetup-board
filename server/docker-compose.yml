@@ -1,0 +1,16 @@
+# Postgres для учебного бэкенда: npm run db:up
+# Порт 5437 — чтобы не конфликтовать с локальным Postgres и базой эталонного API (5436)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: meetup
+      POSTGRES_PASSWORD: meetup
+      POSTGRES_DB: meetup
+    ports:
+      - "5437:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

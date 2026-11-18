@@ -1,0 +1,37 @@
+/* Глобально — только сброс, базовая типографика и утилиты.
+   Всё, что относится к конкретному компоненту, живёт в его *.module.css. */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { color-scheme: light dark; }
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font: 400 var(--text-m) / 1.5 var(--font-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+img { display: block; max-width: 100%; }
+a { color: var(--color-primary); }
+h1, h2, h3, p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.container { width: min(100% - 2 * var(--space-4), 1180px); margin-inline: auto; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+.icon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

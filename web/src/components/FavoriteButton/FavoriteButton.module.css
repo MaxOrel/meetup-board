@@ -1,0 +1,12 @@
+/* Кнопка лежит поверх растянутой ссылки карточки (z-index 2), поэтому z-index 3 */
+.fav {
+  position: absolute; top: var(--space-2); right: var(--space-2); z-index: 3;
+  display: grid; place-items: center; width: 40px; height: 40px;
+  border: 0; border-radius: 50%; background: var(--color-surface); color: var(--color-ink);
+  cursor: pointer; transition: transform 0.15s ease;
+}
+.fav:hover { transform: scale(1.08); }
+.fav:active { transform: scale(0.92); }
+
+.fav[aria-pressed='true'] { background: var(--color-fav); color: #1a1d29; }
+.fav[aria-pressed='true'] :global(.icon) { fill: currentColor; }
