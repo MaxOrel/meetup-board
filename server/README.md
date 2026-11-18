@@ -18,7 +18,8 @@ npm run start:dev    # http://localhost:3000/api/v1/events
 - `POST /auth/register` `{ name, email, password }` → 201 `{ accessToken, user }`; почта занята → 409 с ошибкой у поля `email`.
 - `POST /auth/login` `{ email, password }` → 200 `{ accessToken, user }`; неверные данные → 401.
 - `GET /me` с заголовком `Authorization: Bearer <accessToken>` → пользователь; без токена → 401.
-- Учебный аккаунт создаётся при старте: **user@meetup.local / meetup-demo**.
+- Учебные аккаунты создаются при старте: **user@meetup.local / meetup-demo** и администратор **admin@meetup.local / meetup-admin**.
+- Создавать, менять и удалять события может только администратор: без токена — 401, с токеном обычного пользователя — 403.
 - Пароли хранятся хешем `scrypt` с солью (`auth/password.ts`), токен — JWT на час, секрет — `JWT_SECRET`.
 
 ## Тесты

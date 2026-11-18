@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { AdminGuard } from '../auth/admin.guard.js';
+import { AuthGuard } from '../auth/auth.guard.js';
 import { EventsService } from './events.service.js';
 import { CreateEventDto } from './dto/create-event.dto.js';
 import { UpdateEventDto } from './dto/update-event.dto.js';
@@ -23,18 +25,22 @@ export class EventsController {
     return this.eventsService.findOne(id);
   }
 
+  // Читать может любой, менять афишу — только администратор
   @Post()
+  @UseGuards(AuthGuard, AdminGuard)
   create(@Body() dto: CreateEventDto) {
     return this.eventsService.create(dto);
   }
 
   @Patch(':id')
+  @UseGuards(AuthGuard, AdminGuard)
   update(@EventId id: string, @Body() dto: UpdateEventDto) {
     return this.eventsService.update(id, dto);
   }
 
   @Delete(':id')
   @HttpCode(204)
+  @UseGuards(AuthGuard, AdminGuard)
   remove(@EventId id: string) {
     return this.eventsService.remove(id);
   }

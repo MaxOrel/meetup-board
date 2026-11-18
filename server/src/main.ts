@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { validationPipe } from './common/validation.js';
@@ -9,6 +10,8 @@ import { validationPipe } from './common/validation.js';
 export async function createApp() {
   const app = await NestFactory.create(AppModule, { logger: process.env.NODE_ENV === 'test' ? false : undefined });
   app.setGlobalPrefix('api/v1');
+  // Helmet — набор заголовков безопасности: запрет встраивать ответы во фреймы, nosniff и другие
+  app.use(helmet());
   app.enableCors({ origin: [/^http:\/\/localhost:\d+$/] });
   // Глобальный ValidationPipe: каждый @Body и @Query проверяется по своему DTO
   app.useGlobalPipes(validationPipe);
