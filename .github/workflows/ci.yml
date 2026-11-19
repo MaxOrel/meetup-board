@@ -1,0 +1,168 @@
+# Конвейер: проверки → e2e на собранных контейнерах → образы в реестр → выкладка на сервер.
+# Каждый следующий шаг запускается, только если предыдущие зелёные (needs).
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      CYPRESS_INSTALL_BINARY: 0 # браузер Cypress здесь не нужен
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test # Vitest: юнит, компоненты, MSW
+      - run: npm run build # внутри tsc -b: типы тоже проверены
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    # Настоящий Postgres рядом с тестами — на том же порту, что локально
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: meetup
+          POSTGRES_PASSWORD: meetup
+          POSTGRES_DB: meetup
+        ports: ["5437:5432"]
+        options: --health-cmd "pg_isready -U meetup" --health-interval 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test:e2e # supertest на базе meetup_test
+
+  e2e:
+    needs: [web, api]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Те же контейнеры, что поедут на сервер: проверяем именно их
+      - run: docker compose up -d --build
+      - run: |
+          for i in $(seq 1 60); do curl -sf http://localhost:8080/api/v1/health && exit 0; sleep 2; done
+          docker compose logs; exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci && npx cypress run --browser chrome --config baseUrl=http://localhost:8080
+        working-directory: web
+
+  images:
+    # Образы публикуем только после слияния в основную ветку
+    needs: e2e
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # для GitHub Container Registry
+    steps:
+      - uses: actions/checkout@v4
+      # Имена образов в реестре — только строчными буквами, а в имени репозитория бывают заглавные
+      - id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: web
+          push: true
+          tags: ghcr.io/${{ steps.repo.outputs.name }}/meetup-web:${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          push: true
+          tags: ghcr.io/${{ steps.repo.outputs.name }}/meetup-api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+  deploy:
+    # Выкладка на сервер — только когда образы собраны из проверенного коммита
+    needs: images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production # в настройках репозитория к нему можно добавить «подтверждение вручную»
+      url: https://${{ vars.SITE_ADDRESS }}
+    concurrency:
+      group: production-deploy # два деплоя одновременно не идут
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read # сервер скачивает образы с временным токеном этого запуска
+    env:
+      SSH_TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+      SITE: ${{ vars.SITE_ADDRESS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Секреты передаём через переменные окружения, а не подстановкой в текст команды
+      - name: Ключ и отпечаток сервера
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Отпечаток известен заранее: подсунуть чужой сервер вместо нашего не получится
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Файлы деплоя — на сервер
+        run: scp deploy/compose.prod.yml deploy/Caddyfile deploy/deploy.sh "$SSH_TARGET":/opt/meetup/
+
+      - name: Вход в реестр на сервере (токен живёт, пока идёт этот запуск)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | ssh "$SSH_TARGET" "docker login ghcr.io -u '$ACTOR' --password-stdin"
+
+      - name: Выкладка
+        id: deploy
+        run: ssh "$SSH_TARGET" "cd /opt/meetup && chmod +x deploy.sh && ./deploy.sh $GITHUB_SHA"
+
+      - name: Проверка снаружи — работает ли именно эта версия
+        id: smoke
+        run: |
+          for i in $(seq 1 15); do
+            version=$(curl -fsS "https://$SITE/api/v1/health" | jq -r .version) && [ "$version" = "$GITHUB_SHA" ] && { echo "Сайт отвечает, версия $version"; exit 0; }
+            echo "Попытка $i: ещё не готово"; sleep 5
+          done
+          exit 1
+
+      - name: Откат, если снаружи сайт не отвечает
+        if: failure() && steps.deploy.conclusion == 'success' && steps.smoke.conclusion == 'failure'
+        run: ssh "$SSH_TARGET" "cd /opt/meetup && ./deploy.sh rollback"
+
+      - name: Выходим из реестра на сервере
+        if: always()
+        run: ssh "$SSH_TARGET" "docker logout ghcr.io" || true

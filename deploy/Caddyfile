@@ -1,0 +1,14 @@
+# Caddy: HTTPS «из коробки». Достаточно указать адрес сайта — сертификат Let's Encrypt
+# он получит и продлит сам. Адрес приходит из .env: свой домен или <ip>.sslip.io.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# HSTS: браузер год будет ходить на сайт только по HTTPS и не станет открывать http://
+	header Strict-Transport-Security "max-age=31536000"
+	# Не рассказываем, на чём работаем: Caddy сам добавляет Server и Via
+	header -Server
+	header -Via
+
+	# Дальше — наш nginx с фронтом и проксированием /api
+	reverse_proxy web:80
+}

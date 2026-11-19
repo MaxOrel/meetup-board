@@ -98,7 +98,10 @@ function EventDetails({ event }: { event: MeetupEvent }) {
 
         <section className={styles.section}>
           <h2 className={styles.h2}>О&nbsp;чём</h2>
-          <p className={styles.text}>{event.description}</p>
+          {/* Абзацы — пустая строка в описании. Каждый абзац — текст: React экранирует его сам, HTML из данных не выполнится */}
+          {event.description.split(/\n\s*\n/).map((paragraph, index) => (
+            <p key={index} className={styles.text}>{paragraph}</p>
+          ))}
         </section>
 
         <section className={styles.section}>

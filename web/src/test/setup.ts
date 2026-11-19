@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, vi } from 'vitest'
+import { resetSession } from './handlers.ts'
 import { server } from './server.ts'
 
 // jsdom не умеет прокручивать страницу — подставляем пустую функцию
@@ -12,7 +13,7 @@ window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => {
   cleanup() // каждый тест начинает с чистой страницы
-  localStorage.clear() // и без токена, сохранённого прошлым тестом
+  resetSession() // и гостем: вход из прошлого теста не переносится
   server.resetHandlers() // и с обычными ответами API, даже если прошлый тест их подменил
 })
 afterAll(() => server.close())

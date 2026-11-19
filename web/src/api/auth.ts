@@ -25,13 +25,16 @@ export class AuthError extends Error {
   }
 }
 
-async function send<T extends z.ZodType>(path: string, init: RequestInit, schema: T): Promise<z.infer<T>> {
+// credentials: 'include' — браузер отправляет и принимает httpOnly-cookie сессии.
+// Сам токен фронт никогда не видит.
+async function send(path: string, init: RequestInit = {}): Promise<unknown> {
   let response: Response
   try {
-    response = await fetch(`${API_URL}${path}`, init)
+    response = await fetch(`${API_URL}${path}`, { ...init, credentials: 'include' })
   } catch {
     throw new AuthError(0, 'Сервер не отвечает. Проверьте, что API запущен')
   }
+  if (response.status === 204) return null
   const body: unknown = await response.json().catch(() => null)
 
   if (!response.ok) {
@@ -40,7 +43,10 @@ async function send<T extends z.ZodType>(path: string, init: RequestInit, schema
     const fields = Object.fromEntries((error.data.errors ?? []).map(({ field, message }) => [field, message]))
     throw new AuthError(response.status, error.data.message, fields)
   }
+  return body
+}
 
+function parse<T extends z.ZodType>(schema: T, body: unknown): z.infer<T> {
   const result = schema.safeParse(body)
   if (!result.success) {
     console.error('Ответ не совпал с контрактом:', z.prettifyError(result.error))
@@ -55,15 +61,19 @@ const postJson = (data: object): RequestInit => ({
   body: JSON.stringify(data),
 })
 
-export function login(credentials: Credentials) {
-  return send('/auth/login', postJson(credentials), authResponseSchema)
+export async function login(credentials: Credentials) {
+  return parse(authResponseSchema, await send('/auth/login', postJson(credentials)))
 }
 
-export function register(registration: Registration) {
-  return send('/auth/register', postJson(registration), authResponseSchema)
+export async function register(registration: Registration) {
+  return parse(authResponseSchema, await send('/auth/register', postJson(registration)))
 }
 
-// Защищённый запрос: токен уходит в заголовке Authorization
-export function fetchMe(token: string) {
-  return send('/me', { headers: { Authorization: `Bearer ${token}` } }, userSchema)
+// Кто вошёл: cookie уходит сама, заголовок Authorization больше не нужен
+export async function fetchMe() {
+  return parse(userSchema, await send('/me'))
+}
+
+export async function logout() {
+  await send('/auth/logout', { method: 'POST' })
 }

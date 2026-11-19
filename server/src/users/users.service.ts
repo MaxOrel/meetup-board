@@ -16,7 +16,7 @@ export class UsersService {
     return this.users.findOneBy({ id });
   }
 
-  create(data: Pick<UserEntity, 'email' | 'name' | 'passwordHash'>) {
+  create(data: Pick<UserEntity, 'email' | 'name' | 'passwordHash'> & Partial<Pick<UserEntity, 'role'>>) {
     return this.users.save(this.users.create({ ...data, email: data.email.toLowerCase() }));
   }
 }

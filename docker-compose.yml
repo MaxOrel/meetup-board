@@ -1,0 +1,37 @@
+# Всё приложение одной командой: docker compose up --build → http://localhost:8080
+# Наружу открыт только web (nginx). API и база видны лишь внутри сети compose.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: meetup
+      POSTGRES_PASSWORD: meetup
+      POSTGRES_DB: meetup
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meetup"]
+      interval: 3s
+      retries: 10
+
+  api:
+    build: ./server
+    environment:
+      DATABASE_URL: postgres://meetup:meetup@db:5432/meetup
+      # Секрет подписи токенов — только из окружения. В проде задаётся на сервере, не в репозитории.
+      JWT_SECRET: ${JWT_SECRET:-local-compose-secret-not-for-production-0000}
+      # Учебные аккаунты user@meetup.local и admin@meetup.local — только для локального запуска
+      SEED_DEMO_USERS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
