@@ -42,7 +42,7 @@ export function CatalogPage() {
   return (
     <main className="container">
       <section className={styles.hero}>
-        <h1 className={styles.title}>Митапы, на&nbsp;которые хочется прийти</h1>
+        <h1 className={styles.title}>Митапы, на&nbsp;которые стоит прийти</h1>
         <p className={styles.lead}>Запись бесплатная, места ограничены.</p>
         <SearchField value={filters.query} onChange={(query) => dispatchFilters({ type: 'setQuery', query })} />
       </section>
